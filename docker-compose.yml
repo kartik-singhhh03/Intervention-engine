@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: alcovia-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-alcovia_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/src/models/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alcovia-network
+
+  # Express Server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: alcovia-server
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      CLIENT_URL: http://localhost:5173
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-alcovia_db}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/alcovia}
+      FOCUS_THRESHOLD: ${FOCUS_THRESHOLD:-60}
+      QUIZ_THRESHOLD: ${QUIZ_THRESHOLD:-70}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./server/src:/app/src
+    networks:
+      - alcovia-network
+    command: npm run dev
+
+  # React Client
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: alcovia-client
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3001/api
+      VITE_SOCKET_URL: http://localhost:3001
+    volumes:
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+    depends_on:
+      - server
+    networks:
+      - alcovia-network
+    command: npm run dev
+
+  # n8n Workflow Engine (Optional)
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: alcovia-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-password}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - DATABASE_TYPE=postgresql
+      - DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-alcovia_n8n_db}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - alcovia-network
+    profiles:
+      - optional
+
+volumes:
+  postgres_data:
+    driver: local
+  n8n_data:
+    driver: local
+
+networks:
+  alcovia-network:
+    driver: bridge

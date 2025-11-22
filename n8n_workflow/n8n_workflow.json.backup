@@ -1,0 +1,199 @@
+{
+  "name": "Alcovia Intervention Engine - Student Failure Handler",
+  "description": "Complete workflow with mentor approval, 12-hour fail-safe, and escalation paths",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/intervention-webhook",
+        "httpMethod": "POST",
+        "responseMode": "onReceived"
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.studentId }}",
+              "value2": "",
+              "operation": "notEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Check Student ID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "mentor@alcovia.example.com",
+        "toEmail": "={{ $json.studentEmail || \"student@example.com\" }}",
+        "subject": "Your Learning Progress Review - Action Required",
+        "htmlText": "<h2>Hi {{ $json.studentName || \"Student\" }},</h2>\n<p>We've noticed some areas where you could improve your performance:</p>\n<ul>\n<li><strong>Reason:</strong> {{ $json.reason }}</li>\n<li><strong>Focus Time:</strong> {{ $json.focusMinutes }} minutes</li>\n<li><strong>Quiz Score:</strong> {{ $json.quizScore }}%</li>\n</ul>\n<p>A mentor will review your case and assign you a remedial task shortly.</p>\n<p>Best regards,<br/>Alcovia Learning Team</p>"
+      },
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "waitTime": 5,
+        "unit": "minutes"
+      },
+      "name": "Wait for Mentor Approval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "path": "/mentor-decision",
+        "httpMethod": "POST",
+        "responseMode": "onReceived"
+      },
+      "name": "Mentor Decision Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/api/assign-intervention",
+        "method": "POST",
+        "bodyParametersUi": "keyValue",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "studentId",
+              "value": "={{ $json.studentId }}"
+            },
+            {
+              "name": "task",
+              "value": "={{ $json.task || \"Please review the lesson material and retake the quiz\" }}"
+            }
+          ]
+        }
+      },
+      "name": "Assign Remedial Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.approved }}",
+              "value2": "true",
+              "operation": "equals"
+            }
+          ]
+        }
+      },
+      "name": "Check Mentor Approval",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "waitTime": 12,
+        "unit": "hours"
+      },
+      "name": "Timeout - Escalate if No Response",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "fromEmail": "escalation@alcovia.example.com",
+        "toEmail": "admin@alcovia.example.com",
+        "subject": "Escalation: Student {{ $json.studentId }} Intervention Timeout",
+        "htmlText": "<h2>Escalation Alert</h2>\n<p>Student {{ $json.studentId }} has not completed their remedial task within 12 hours.</p>\n<p>Action Required: Manual mentor review and follow-up.</p>"
+      },
+      "name": "Send Escalation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/api/complete-task",
+        "method": "POST",
+        "bodyParametersUi": "keyValue",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "studentId",
+              "value": "={{ $json.studentId }}"
+            },
+            {
+              "name": "interventionId",
+              "value": "={{ $json.interventionId }}"
+            }
+          ]
+        }
+      },
+      "name": "Mark Task Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "success@alcovia.example.com",
+        "toEmail": "={{ $json.studentEmail || \"student@example.com\" }}",
+        "subject": "Great Job! Your Remedial Task is Complete",
+        "htmlText": "<h2>Congratulations!</h2>\n<p>You have successfully completed your remedial task.</p>\n<p>Keep up the good work and stay focused on your learning goals.</p>\n<p>Best regards,<br/>Alcovia Learning Team</p>"
+      },
+      "name": "Send Completion Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Check Student ID", "branch": 0, "type": "main" }]]
+    },
+    "Check Student ID": {
+      "main": [
+        [{ "node": "Send Email Notification", "branch": 0, "type": "main" }],
+        [{ "node": "Wait for Mentor Approval", "branch": 0, "type": "main" }]
+      ]
+    },
+    "Send Email Notification": {
+      "main": [[{ "node": "Wait for Mentor Approval", "branch": 0, "type": "main" }]]
+    },
+    "Wait for Mentor Approval": {
+      "main": [[{ "node": "Mentor Decision Webhook", "branch": 0, "type": "main" }]]
+    },
+    "Mentor Decision Webhook": {
+      "main": [[{ "node": "Check Mentor Approval", "branch": 0, "type": "main" }]]
+    },
+    "Check Mentor Approval": {
+      "main": [
+        [{ "node": "Assign Remedial Task", "branch": 0, "type": "main" }],
+        [{ "node": "Timeout - Escalate if No Response", "branch": 0, "type": "main" }]
+      ]
+    },
+    "Assign Remedial Task": {
+      "main": [[{ "node": "Mark Task Complete", "branch": 0, "type": "main" }]]
+    },
+    "Timeout - Escalate if No Response": {
+      "main": [[{ "node": "Send Escalation Email", "branch": 0, "type": "main" }]]
+    },
+    "Mark Task Complete": {
+      "main": [[{ "node": "Send Completion Email", "branch": 0, "type": "main" }]]
+    }
+  }
+}
