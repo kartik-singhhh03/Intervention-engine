@@ -11,13 +11,11 @@ const router = express.Router();
 router.get('/:studentId', async (req, res) => {
   const { studentId } = req.params;
 
-  // Input validation
-  const parsedStudentId = parseInt(studentId, 10);
-  
-  if (isNaN(parsedStudentId) || parsedStudentId <= 0) {
+  // Input validation - accept both string and numeric IDs
+  if (!studentId || studentId.trim() === '') {
     return res.status(400).json({
       error: 'Invalid studentId',
-      details: 'studentId must be a positive number'
+      details: 'studentId is required'
     });
   }
 

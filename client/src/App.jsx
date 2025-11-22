@@ -11,7 +11,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
 // Get studentId from URL params or use default for testing
 const getStudentId = () => {
   const params = new URLSearchParams(window.location.search);
-  return params.get('studentId') || 'test-student-123';
+  return params.get('studentId') || 'alice-2024';
 };
 
 export default function App() {
@@ -72,31 +72,55 @@ export default function App() {
 
   // Load initial student data from backend
   useEffect(() => {
+    let isMounted = true;
+    
+    // Set timeout to force loading to false after 2 seconds
+    const timeoutId = setTimeout(() => {
+      console.log('⏱️ Loading timeout - forcing app to show');
+      if (isMounted) {
+        setLoading(false);
+      }
+    }, 2000);
+
     const loadStudentData = async () => {
       try {
-        setLoading(true);
+        console.log('🔄 Loading student data for:', studentId);
         const data = await getStudentData(studentId);
-        setStudentData({
-          status: data.data?.status || 'on_track',
-          currentTask: data.data?.currentTask || null,
-          message: '',
-          latestIntervention: data.data?.latestIntervention || null
-        });
+        console.log('📊 Student data loaded:', data);
+        
+        if (isMounted) {
+          setStudentData({
+            status: data.data?.status || 'on_track',
+            currentTask: data.data?.currentTask || null,
+            message: '',
+            latestIntervention: data.data?.latestIntervention || null
+          });
+        }
       } catch (error) {
-        console.error('Failed to load student data:', error);
+        console.error('❌ Failed to load student data:', error);
         // Default to on_track if API fails
-        setStudentData({
-          status: 'on_track',
-          currentTask: null,
-          message: '',
-          latestIntervention: null
-        });
+        if (isMounted) {
+          setStudentData({
+            status: 'on_track',
+            currentTask: null,
+            message: '',
+            latestIntervention: null
+          });
+        }
       } finally {
-        setLoading(false);
+        console.log('✅ Loading complete, setting loading to false');
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadStudentData();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [studentId]);
 
   // Setup cheater detection

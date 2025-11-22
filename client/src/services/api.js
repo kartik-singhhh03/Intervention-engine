@@ -1,7 +1,10 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 export const apiCall = async (endpoint, options = {}) => {
-  const url = `${API_URL}${endpoint}`;
+  // Remove leading slash from endpoint if API_URL already includes /api
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_URL}${cleanEndpoint}`;
+  console.log('🔗 API Call:', url);
   try {
     const response = await fetch(url, {
       headers: {

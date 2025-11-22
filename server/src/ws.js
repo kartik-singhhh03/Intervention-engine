@@ -23,17 +23,17 @@ export const setupWebSocket = (httpServer) => {
     // ----------------------------------------------------
     // 1. Student subscribes to their room
     // ----------------------------------------------------
-    socket.on("subscribe", ({ student_id }) => {
-      if (!student_id) {
-        console.warn(`⚠️ Subscribe event received without student_id from socket ${socket.id}`);
-        return;
-      }
+    const normalizeStudentId = (value) => {
+      if (value === undefined || value === null) return null;
+      const normalized = String(value).trim();
+      return normalized.length ? normalized : null;
+    };
 
-      // Validate student_id is a number
-      const studentId = typeof student_id === 'number' ? student_id : parseInt(student_id, 10);
-      
-      if (isNaN(studentId) || studentId <= 0) {
-        console.error(`❌ Invalid student_id received: ${student_id}`);
+    socket.on("subscribe", ({ student_id }) => {
+      const studentId = normalizeStudentId(student_id);
+
+      if (!studentId) {
+        console.warn(`⚠️ Subscribe event received without student_id from socket ${socket.id}`);
         return;
       }
 
@@ -55,16 +55,10 @@ export const setupWebSocket = (httpServer) => {
     // 2. Cheater detection events (tab switch / hidden window)
     // ----------------------------------------------------
     socket.on("cheater", async ({ student_id, reason }) => {
-      if (!student_id) {
-        console.warn(`⚠️ Cheater event received without student_id from socket ${socket.id}`);
-        return;
-      }
+      const studentId = normalizeStudentId(student_id);
 
-      // Validate and parse student_id
-      const studentId = typeof student_id === 'number' ? student_id : parseInt(student_id, 10);
-      
-      if (isNaN(studentId) || studentId <= 0) {
-        console.error(`❌ Invalid student_id in cheater event: ${student_id}`);
+      if (!studentId) {
+        console.warn(`⚠️ Cheater event received without student_id from socket ${socket.id}`);
         return;
       }
 
@@ -94,16 +88,10 @@ export const setupWebSocket = (httpServer) => {
     // 3. General status broadcast handler
     // ----------------------------------------------------
     socket.on("status", ({ student_id, status, task, message, ...extraData }) => {
-      if (!student_id) {
-        console.warn(`⚠️ Status event received without student_id from socket ${socket.id}`);
-        return;
-      }
+      const studentId = normalizeStudentId(student_id);
 
-      // Validate student_id
-      const studentId = typeof student_id === 'number' ? student_id : parseInt(student_id, 10);
-      
-      if (isNaN(studentId) || studentId <= 0) {
-        console.error(`❌ Invalid student_id in status event: ${student_id}`);
+      if (!studentId) {
+        console.warn(`⚠️ Status event received without student_id from socket ${socket.id}`);
         return;
       }
 
@@ -149,15 +137,16 @@ export const emitStatus = (io, studentId, payload) => {
     return;
   }
 
-  // Parse studentId if it's a string
-  const parsedStudentId = typeof studentId === 'number' ? studentId : parseInt(studentId, 10);
-  
-  if (isNaN(parsedStudentId) || parsedStudentId <= 0) {
+  const normalizedId = studentId === undefined || studentId === null
+    ? null
+    : String(studentId).trim();
+
+  if (!normalizedId) {
     console.error(`❌ emitStatus: Invalid studentId: ${studentId}`);
     return;
   }
 
-  const room = `student_${parsedStudentId}`;
+  const room = `student_${normalizedId}`;
   const statusPayload = {
     ...payload,
     timestamp: new Date().toISOString()
